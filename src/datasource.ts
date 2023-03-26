@@ -100,18 +100,8 @@ export class DataSource<T = any, S = any> {
       return this.promise(Promise.resolve(result));
     }
   }
-  cancel(): Promise<Result<T, S>> {
-    const result = new Promise<Result<T, S>>((resolve) => {
-      const result: Result<T, S> = {
-        page: [],
-        search: this.search,
-        total: this.total,
-      };
-
-      resolve(result);
-    });
-
-    return this.promise(result);
+  cancel(): void {
+    this._reject?.();
   }
 
   filter(
@@ -126,7 +116,7 @@ export class DataSource<T = any, S = any> {
     return result;
   }
 
-  upsert(predicate: (value: T, index: number) => T, item: T) {
+  upsert(predicate: (value: T, index: number) => boolean, item: T): void {
     const index = this.get().findIndex(predicate);
     if (index >= 0) {
       this.get().splice(index, 1, item);
@@ -137,12 +127,12 @@ export class DataSource<T = any, S = any> {
     this.init(this._options);
   }
 
-  [Symbol.iterator] = () => this.get()[Symbol.iterator];
+  [Symbol.iterator] = () => this.get()[Symbol.iterator]();
 
   private init(options: DataSourceOptions<T, S>): void {
     this.search = null;
     this._data = [];
-    this._filtered = [];
+    this._filtered = null;
     this.page = [];
     this.index = 0;
     this.indexes = 0;
@@ -205,14 +195,14 @@ export class DataSource<T = any, S = any> {
     return result;
   }
 
-  private promise(result: Promise<Result<T, S>>) {
+  private async promise(result: Promise<Result<T, S>>): Promise<Result<T, S>> {
     this._reject?.();
 
     const cancelable = new Promise<Result<T, S>>(
       (resolve, reject) => (this._reject = reject)
     );
 
-    return Promise.race([cancelable, result]).then((result) => {
+    return await Promise.race([cancelable, result]).then((result) => {
       this._reject = null;
 
       return result;

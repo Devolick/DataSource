@@ -1,5 +1,5 @@
 import assert from "assert";
-import { DataSource, Result } from "../src/index";
+import { DataSource, DataSourceOptions, Result } from "../src/index";
 
 describe("Data Source", function () {
   describe("clone()", function () {
@@ -49,7 +49,7 @@ describe("Data Source", function () {
         limit: 1000,
         size: 50,
         request: () => Promise.resolve({ page }),
-      });
+      } as DataSourceOptions);
 
       const result = await dataSource.query();
       const answer: Result = {
@@ -123,14 +123,9 @@ describe("Data Source", function () {
         request: () => Promise.resolve({ page: [] }),
       });
 
-      const result = dataSource.filter(() => true);
-      const answer: Result = {
-        page: [],
-        search: undefined,
-        total: undefined,
-      };
-
-      assert.deepEqual(result, answer);
+      assert.doesNotThrow(() => {
+        dataSource.cancel();
+      });
     });
   });
 
@@ -150,6 +145,63 @@ describe("Data Source", function () {
       };
 
       assert.deepEqual(result, answer);
+    });
+  });
+
+  describe("upsert()", function () {
+    it("Upsert without data", function () {
+      const dataSource = new DataSource<any>({
+        limit: 1000,
+        size: 50,
+        request: () => Promise.resolve({ page: [] }),
+      });
+
+      assert.doesNotThrow(() => {
+        dataSource.upsert((value, index) => true, {});
+      });
+    });
+  });
+
+  describe("clear()", function () {
+    it("Clear without data", function () {
+      const dataSource = new DataSource<any>({
+        limit: 1000,
+        size: 50,
+        request: () => Promise.resolve({ page: [] }),
+      });
+
+      assert.doesNotThrow(() => {
+        dataSource.clear();
+      });
+    });
+  });
+
+  describe("get()", function () {
+    it("Get without data", function () {
+      const dataSource = new DataSource<any>({
+        limit: 1000,
+        size: 50,
+        request: () => Promise.resolve({ page: [] }),
+      });
+
+      const result = dataSource.get();
+
+      assert.deepEqual(result, []);
+    });
+  });
+
+  describe("iterator()", function () {
+    it("Each without data", function () {
+      const dataSource = new DataSource<any>({
+        limit: 1000,
+        size: 50,
+        request: () => Promise.resolve({ page: [] }),
+      });
+
+      assert.doesNotThrow(() => {
+        for (const item of dataSource) {
+        }
+      });
     });
   });
 });
