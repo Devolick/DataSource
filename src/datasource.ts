@@ -4,6 +4,15 @@ export interface Result<T = any, S = any> {
   readonly total?: number | null;
 }
 
+export interface Request<T = any, S = any> {
+  readonly search?: S | null;
+  readonly page: T[];
+  readonly index: number;
+  readonly indexes: number;
+  readonly size: number;
+  readonly total?: number | null;
+}
+
 export interface Source<T = any, S = any> {
   readonly search?: S | null;
   readonly page: T[];
@@ -17,7 +26,7 @@ export interface Source<T = any, S = any> {
 export interface DataSourceOptions<T = any, S = any> {
   readonly size: number;
   readonly limit: number;
-  readonly request: (context: Source<T, S>) => Promise<Result<T, S>>;
+  readonly request: (context: Request<T, S>) => Promise<Result<T, S>>;
 }
 
 export class DataSource<T = any, S = any> {
@@ -34,7 +43,9 @@ export class DataSource<T = any, S = any> {
 
   private _data!: T[];
   private _filtered!: T[] | null;
-  private _predicate?: ((value: T, index: number, array: T[]) => T[]) | null;
+  private _predicate?:
+    | ((value: T, index: number, array: T[]) => boolean)
+    | null;
   private _reject?: ((reason?: any) => void) | null;
 
   constructor(private _options: DataSourceOptions<T, S>) {
@@ -54,29 +65,40 @@ export class DataSource<T = any, S = any> {
     return clone;
   }
 
-  query(search?: S): Promise<Result<T, S>> {
-    const result = this.load(search, 0, true);
+  get(): T[] {
+    return this._filtered || this._data;
+  }
 
-    return this.promise(result);
+  query(search?: S): Promise<Result<T, S>> {
+    const promise = this.load(search, 0, this.size);
+
+    return promise;
   }
   fetch(search?: S): Promise<Result<T, S>> {
     const clone = this.clone(false);
-    const result = clone
-      .query(search)
-      .then((result) => (this.more ? clone.query(search) : result));
+    const repeat = (index: number = 0): Promise<Result<T, S>> =>
+      clone
+        .load(search, ++index, this.limit)
+        .then(() => (clone.more ? repeat(index) : clone.read(0)));
+    const promise = repeat(-1).then((result) => {
+      Object.assign(this, clone);
+      return result;
+    });
 
-    Object.assign(this, clone);
-
-    return this.promise(result);
+    return promise;
   }
   next(index?: number): Promise<Result<T, S>> {
-    if (index === undefined && this.more) {
-      index == this.index + 1;
+    if (index === undefined || index > this.indexes) {
+      index = Math.min(index ?? -1, this.indexes) + 1;
+      const promise = this.load(this.search, index);
+
+      return promise;
+    } else {
+      index = Math.min(Math.max(index ?? 0, 1), 20);
+      const result = this.read(index);
+
+      return this.promise(Promise.resolve(result));
     }
-
-    const result = this.load(this.search, index, false);
-
-    return this.promise(result);
   }
   cancel(): Promise<Result<T, S>> {
     const result = new Promise<Result<T, S>>((resolve) => {
@@ -93,11 +115,13 @@ export class DataSource<T = any, S = any> {
   }
 
   filter(
-    predicate: (value: T, index: number, array: T[]) => T[]
+    predicate: ((value: T, index: number, array: T[]) => boolean) | null
   ): Result<T, S> {
     this._predicate = predicate;
-    this._filtered = this._data.filter(this._predicate);
-    const result = this.step(0, false);
+    this._filtered = this._predicate
+      ? this._data.filter(this._predicate)
+      : this._data;
+    const result = this.read(0);
 
     return result;
   }
@@ -135,84 +159,45 @@ export class DataSource<T = any, S = any> {
 
   private load(
     search?: S | null,
-    index: number = 0,
-    reload: boolean = false
+    index?: number,
+    size?: number
   ): Promise<Result<T, S>> {
-    this.search = search;
-    this.indexes = Math.ceil(this._data.length / this.size);
-    const fromData =
-      !this.more || (this.indexes >= index && !!this._data.length);
-
-    if (fromData && !reload) {
-      const result = new Promise<Result<T, S>>((resolve) => {
-        const page = this._data.slice(this.index, this.size);
-        const result: Result<T, S> = {
-          page,
-          search: this.search,
-          total: this.total,
-        };
-
-        resolve(result);
-      });
-
-      return this.promise(result);
-    } else if (this.more) {
-      const context: Source<T, S> = {
-        search: this.search,
-        page: this.page,
-        index: this.indexes + 1,
-        indexes: this.indexes,
-        size: this.size,
-        limit: this.limit,
-        total: this.total,
-      };
-
-      const result = this._options.request(context).then((result) => {
-        this.more = result.page.length == this.size;
-        this._data.push(...result.page);
-
-        if (result?.search !== undefined) {
-          this.search = result.search;
-        }
-        if (result.total !== undefined) {
-          this.total = result.total;
-        }
-
-        return result;
-      });
-
-      return this.promise(result);
-    } else {
-      const result = new Promise<Result<T, S>>((resolve) => {
-        const result: Result<T, S> = {
-          page: [],
-          search: this.search,
-          total: this.total,
-        };
-
-        resolve(result);
-      });
-
-      return this.promise(result);
+    if (index === undefined) {
+      this._data.splice(0);
     }
+    index = index ?? 0;
+    size = size ?? this.size;
+
+    const context: Request<T, S> = {
+      search,
+      index,
+      size,
+      indexes: this.indexes,
+      page: this.page,
+      total: this.total,
+    };
+
+    const result = this._options.request(context).then((response) => {
+      this.more = response.page.length >= size!;
+      this.page = response.page;
+      this._data.push(...response.page);
+      this.index = index!;
+      this.indexes = Math.ceil(this._data.length / this.size);
+      this.search = response.search;
+      this.total = response.total;
+
+      return response;
+    });
+
+    return this.promise(result);
   }
 
-  private get(): T[] {
-    return this._filtered || this._data;
-  }
-
-  private step(index: number = 0, reload: boolean = false): Result<T, S> {
-    if (reload) {
-      this._filtered = null;
-      this._predicate = null;
-    }
-    const data = this._filtered || this._data;
+  private read(index: number): Result<T, S> {
     this.index = index;
-    this.indexes = Math.ceil(data.length / this.size);
-
-    const page = data.slice(this.index, this.size);
+    this.indexes = Math.ceil(this.get().length / this.size);
+    this.page = this.get().slice(this.index, this.size);
     const result: Result<T, S> = {
-      page,
+      page: this.page,
       search: this.search,
       total: this.total,
     };

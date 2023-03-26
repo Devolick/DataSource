@@ -42,13 +42,13 @@ describe("Data Source", function () {
 
   describe("query()", function () {
     it("Query data without search", async function () {
-      const data = Array(1000)
+      const page = Array(50)
         .fill(0)
         .map((m, i) => i);
       const dataSource = new DataSource({
         limit: 1000,
         size: 50,
-        request: () => Promise.resolve({ page: [] }),
+        request: () => Promise.resolve({ page }),
       });
 
       const result = await dataSource.query();
@@ -56,9 +56,99 @@ describe("Data Source", function () {
         page: Array(50)
           .fill(0)
           .map((m, i) => i),
-        search: undefined,
-        total: null,
       };
+
+      assert.deepEqual(result, answer);
+    });
+  });
+
+  describe("fetch()", function () {
+    it("Fetch data without search", async function () {
+      let index = -1;
+      const dataSource = new DataSource({
+        limit: 1000,
+        size: 50,
+        request: () => {
+          if (++index > 2) {
+            return Promise.resolve({ page: [] });
+          }
+          return Promise.resolve({
+            page: Array(1000)
+              .fill(0)
+              .map((m, i) => i + 1000 * index),
+          });
+        },
+      });
+
+      const result = await dataSource.fetch();
+      const answer: Result = {
+        page: Array(50)
+          .fill(0)
+          .map((m, i) => i),
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+  });
+
+  describe("next()", function () {
+    it("Next data without index", async function () {
+      const page = Array(50)
+        .fill(0)
+        .map((m, i) => i);
+      const dataSource = new DataSource({
+        limit: 1000,
+        size: 50,
+        request: () => Promise.resolve({ page }),
+      });
+
+      const result = await dataSource.next();
+      const answer: Result = {
+        page: Array(50)
+          .fill(0)
+          .map((m, i) => i),
+      };
+
+      assert.deepEqual(result, answer);
+    });
+  });
+
+  describe("cancel()", function () {
+    it("Cancel request", function () {
+      const dataSource = new DataSource({
+        limit: 1000,
+        size: 50,
+        request: () => Promise.resolve({ page: [] }),
+      });
+
+      const result = dataSource.filter(() => true);
+      const answer: Result = {
+        page: [],
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+  });
+
+  describe("filter()", function () {
+    it("Filter without data", function () {
+      const dataSource = new DataSource({
+        limit: 1000,
+        size: 50,
+        request: () => Promise.resolve({ page: [] }),
+      });
+
+      const result = dataSource.filter(() => true);
+      const answer: Result = {
+        page: [],
+        search: undefined,
+        total: undefined,
+      };
+
       assert.deepEqual(result, answer);
     });
   });
