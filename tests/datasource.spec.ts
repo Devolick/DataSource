@@ -1,7 +1,30 @@
 import assert from "assert";
+import mockData from "./mockData.json";
 import { DataSource, DataSourceOptions, Result } from "../src/index";
 
+interface Mock {
+  readonly id: number;
+  readonly firtName: string;
+  readonly lastName: string;
+  readonly email: string;
+  readonly carModel: number;
+}
+
 describe("Data Source", function () {
+  const basicOptions: DataSourceOptions<Mock, string> = {
+    limit: 1000,
+    size: 50,
+    request: ({ search }) => {
+      const page = (mockData as unknown as Mock[]).filter(({ firtName }) =>
+        firtName.startsWith(search || "")
+      );
+
+      return Promise.resolve({
+        page,
+      });
+    },
+  };
+
   describe("clone()", function () {
     it("Clone new data source instance", function () {
       const dataSource = new DataSource({
@@ -49,13 +72,38 @@ describe("Data Source", function () {
         limit: 1000,
         size: 50,
         request: () => Promise.resolve({ page }),
-      } as DataSourceOptions);
+      });
 
       const result = await dataSource.query();
       const answer: Result = {
         page: Array(50)
           .fill(0)
           .map((m, i) => i),
+      };
+
+      assert.deepEqual(result, answer);
+    });
+    it("Query data with search", async function () {
+      const dataSource = new DataSource(basicOptions);
+
+      const result = await dataSource.query("Sy");
+      const answer: Result = {
+        page: [
+          {
+            id: 8,
+            firtName: "Sydney",
+            lastName: "Brosnan",
+            email: "sbrosnan7@slate.com",
+            carModel: "Jetta III",
+          },
+          {
+            id: 790,
+            firtName: "Sydney",
+            lastName: "Archanbault",
+            email: "sarchanbaultlx@1und1.de",
+            carModel: "Silverado 3500",
+          },
+        ],
       };
 
       assert.deepEqual(result, answer);
