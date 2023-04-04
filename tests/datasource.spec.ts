@@ -1,6 +1,8 @@
 import assert from "assert";
-import mockData from "./mockData.json";
+import _mockData from "./mockData.json";
 import { DataSource, DataSourceOptions, Result } from "../src/index";
+
+const mockData = _mockData as unknown as Mock[];
 
 interface Mock {
   readonly id: number;
@@ -12,45 +14,40 @@ interface Mock {
 
 describe("Data Source", function () {
   const basicOptions: DataSourceOptions<Mock, string> = {
-    limit: 1000,
+    limit: 100,
     size: 50,
-    request: ({ search }) => {
-      const page = (mockData as unknown as Mock[]).filter(({ firtName }) =>
-        firtName.startsWith(search || "")
-      );
+    request: ({ search, index, size }) => {
+      const page = mockData
+        .filter(({ firtName }) => !search || firtName.startsWith(search || ""))
+        .slice(index * size, index * size + size);
+      const more = index < Math.ceil(mockData.length / size);
 
-      return Promise.resolve({
-        page,
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ page, more });
+        }, 10);
       });
     },
   };
 
   describe("clone()", function () {
     it("Clone new data source instance", function () {
-      const dataSource = new DataSource({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
+      const dataSource = new DataSource(basicOptions);
       const cloneDataSource = dataSource.clone();
 
       assert.deepEqual(dataSource, cloneDataSource);
     });
     it("Clone full new data source instance", function () {
-      const dataSource = new DataSource({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
-      dataSource["search"] = { test: "test" };
-      dataSource["page"] = ["test"] as any;
-      dataSource["index"] = 1;
-      dataSource["indexes"] = 1;
-      dataSource["size"] = 40;
-      dataSource["limit"] = 900;
-      dataSource["total"] = 1200;
-      dataSource["loading"] = true;
-      dataSource["more"] = true;
+      const dataSource = new DataSource(basicOptions);
+      dataSource["_search"] = { test: "test" } as any;
+      dataSource["_page"] = ["test"] as any;
+      dataSource["_index"] = 1;
+      dataSource["_indexes"] = 1;
+      dataSource["_size"] = 40;
+      dataSource["_limit"] = 900;
+      dataSource["_total"] = 1200;
+      dataSource["_loading"] = true;
+      dataSource["_more"] = true;
 
       dataSource["_data"] = ["test"] as any;
       dataSource["_filtered"] = ["test"] as any;
@@ -65,20 +62,15 @@ describe("Data Source", function () {
 
   describe("query()", function () {
     it("Query data without search", async function () {
-      const page = Array(50)
-        .fill(0)
-        .map((m, i) => i);
-      const dataSource = new DataSource({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page }),
-      });
+      const page = mockData.slice(0, 50);
+      const dataSource = new DataSource(basicOptions);
 
       const result = await dataSource.query();
       const answer: Result = {
-        page: Array(50)
-          .fill(0)
-          .map((m, i) => i),
+        page,
+        more: true,
+        search: undefined,
+        total: undefined,
       };
 
       assert.deepEqual(result, answer);
@@ -104,6 +96,9 @@ describe("Data Source", function () {
             carModel: "Silverado 3500",
           },
         ],
+        more: false,
+        search: undefined,
+        total: undefined,
       };
 
       assert.deepEqual(result, answer);
@@ -112,27 +107,13 @@ describe("Data Source", function () {
 
   describe("fetch()", function () {
     it("Fetch data without search", async function () {
-      let index = -1;
-      const dataSource = new DataSource({
-        limit: 1000,
-        size: 50,
-        request: () => {
-          if (++index > 2) {
-            return Promise.resolve({ page: [] });
-          }
-          return Promise.resolve({
-            page: Array(1000)
-              .fill(0)
-              .map((m, i) => i + 1000 * index),
-          });
-        },
-      });
+      const page = mockData.slice(0, 50);
+      const dataSource = new DataSource(basicOptions);
 
       const result = await dataSource.fetch();
       const answer: Result = {
-        page: Array(50)
-          .fill(0)
-          .map((m, i) => i),
+        page,
+        more: false,
         search: undefined,
         total: undefined,
       };
@@ -143,20 +124,15 @@ describe("Data Source", function () {
 
   describe("next()", function () {
     it("Next data without index", async function () {
-      const page = Array(50)
-        .fill(0)
-        .map((m, i) => i);
-      const dataSource = new DataSource({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page }),
-      });
+      const page = mockData.slice(0, 50);
+      const dataSource = new DataSource(basicOptions);
 
       const result = await dataSource.next();
       const answer: Result = {
-        page: Array(50)
-          .fill(0)
-          .map((m, i) => i),
+        page,
+        more: true,
+        search: undefined,
+        total: undefined,
       };
 
       assert.deepEqual(result, answer);
@@ -165,11 +141,9 @@ describe("Data Source", function () {
 
   describe("cancel()", function () {
     it("Cancel request", function () {
-      const dataSource = new DataSource({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
+      const dataSource = new DataSource(basicOptions);
+
+      dataSource.fetch();
 
       assert.doesNotThrow(() => {
         dataSource.cancel();
@@ -179,15 +153,59 @@ describe("Data Source", function () {
 
   describe("filter()", function () {
     it("Filter without data", function () {
-      const dataSource = new DataSource({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
+      const dataSource = new DataSource(basicOptions);
 
       const result = dataSource.filter(() => true);
       const answer: Result = {
         page: [],
+        more: false,
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+
+    it("Filter exist data", async function () {
+      const dataSource = new DataSource(basicOptions);
+
+      await dataSource.query();
+      const result = dataSource.filter(() => true);
+      const answer: Result = {
+        page: mockData.slice(0, 50),
+        more: true,
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+
+    it("Filter exist data with value", async function () {
+      const dataSource = new DataSource(basicOptions);
+
+      await dataSource.fetch();
+      const result = dataSource.filter(({ firtName }) =>
+        firtName.startsWith("Sy")
+      );
+      const answer: Result = {
+        page: [
+          {
+            id: 8,
+            firtName: "Sydney",
+            lastName: "Brosnan",
+            email: "sbrosnan7@slate.com",
+            carModel: "Jetta III",
+          },
+          {
+            id: 790,
+            firtName: "Sydney",
+            lastName: "Archanbault",
+            email: "sarchanbaultlx@1und1.de",
+            carModel: "Silverado 3500",
+          },
+        ],
+        more: false,
         search: undefined,
         total: undefined,
       };
@@ -198,25 +216,49 @@ describe("Data Source", function () {
 
   describe("upsert()", function () {
     it("Upsert without data", function () {
-      const dataSource = new DataSource<any>({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
+      const dataSource = new DataSource<Mock>(basicOptions);
 
       assert.doesNotThrow(() => {
-        dataSource.upsert((value, index) => true, {});
+        dataSource.upsert(
+          () => true,
+          (value) => value
+        );
       });
+    });
+
+    it("Upsert exist data for value", async function () {
+      const dataSource = new DataSource<Mock>(basicOptions);
+
+      await dataSource.fetch();
+      const result = dataSource.upsert(
+        ({ firtName }) => firtName.startsWith("Sy"),
+        (value) => ({ ...value, firtName: "Nadia" })
+      );
+
+      const answer: Result = {
+        page: mockData.slice(0, 50).map((mock) => {
+          if (mock.firtName === "Sydney") {
+            return { ...mock, firtName: "Nadia" };
+          }
+
+          return mock;
+        }),
+        more: false,
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
     });
   });
 
+  describe("insert()", function () {});
+
+  describe("remove()", function () {});
+
   describe("clear()", function () {
     it("Clear without data", function () {
-      const dataSource = new DataSource<any>({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
+      const dataSource = new DataSource<Mock>(basicOptions);
 
       assert.doesNotThrow(() => {
         dataSource.clear();
@@ -226,11 +268,7 @@ describe("Data Source", function () {
 
   describe("get()", function () {
     it("Get without data", function () {
-      const dataSource = new DataSource<any>({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
+      const dataSource = new DataSource<Mock>(basicOptions);
 
       const result = dataSource.get();
 
@@ -238,18 +276,20 @@ describe("Data Source", function () {
     });
   });
 
+  describe("set()", function () {});
+
   describe("iterator()", function () {
     it("Each without data", function () {
-      const dataSource = new DataSource<any>({
-        limit: 1000,
-        size: 50,
-        request: () => Promise.resolve({ page: [] }),
-      });
+      const dataSource = new DataSource<Mock>(basicOptions);
 
       assert.doesNotThrow(() => {
         for (const item of dataSource) {
         }
       });
     });
+  });
+
+  describe("Using", function () {
+    it("", function () {});
   });
 });

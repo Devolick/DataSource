@@ -2,9 +2,15 @@
   "name": "datasource",
   "version": "1.0.0",
   "description": "Requests data as pages",
-  "main": "index.js",
+  "main": "dist/datasource.min.js",
+  "types": "dist/types/index.d.ts",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "build:es5": "webpack --config webpack.config.js",
+    "build:es5min": "webpack --config webpack.min.config.js",
+    "build:ts": "tsc --emitDeclarationOnly --outDir dist/types",
+    "build": "npm run build:es5 && npm run build:es5min && npm run build:ts",
+    "start:angular": "npm run --prefix ./public/angular start"
   },
   "keywords": [
     "Data",
@@ -14,14 +20,21 @@
   "author": "Dzmitry Dym",
   "license": "MIT",
   "devDependencies": {
+    "@babel/core": "^7.21.4",
+    "@babel/preset-env": "^7.21.4",
     "@types/node": "^18.15.7",
+    "babel-loader": "^9.1.2",
+    "lodash": "^4.17.21",
     "mocha": "^10.2.0",
+    "terser-webpack-plugin": "^5.3.7",
+    "ts-loader": "^9.4.2",
     "ts-node": "^10.9.1",
-    "typescript": "^5.0.2"
+    "typescript": "^5.0.2",
+    "webpack": "^5.77.0",
+    "webpack-cli": "^5.0.1"
   },
   "dependencies": {
     "@types/lodash": "^4.14.191",
-    "@types/mocha": "^10.0.1",
-    "lodash": "^4.17.21"
+    "@types/mocha": "^10.0.1"
   }
 }
