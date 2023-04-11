@@ -1,3 +1,7 @@
+export type RequestType<T = any, S = any> = (
+  context: Request<T, S>
+) => Promise<Result<T, S>>;
+
 export interface Result<T = any, S = any> {
   readonly search?: S | null;
   readonly page: T[];
@@ -24,5 +28,5 @@ export interface DataSourceOptions<T = any, S = any> {
   readonly size?: number;
   readonly limit?: number;
   readonly buffer?: number;
-  readonly request: (context: Request<T, S>) => Promise<Result<T, S>>;
+  readonly request: RequestType<T, S>;
 }

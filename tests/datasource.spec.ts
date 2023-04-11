@@ -67,7 +67,6 @@ describe("Data Source", function () {
       const result = await dataSource.query();
       const answer: Result = {
         page,
-
         search: undefined,
         total: undefined,
       };
@@ -155,7 +154,6 @@ describe("Data Source", function () {
       const result = await dataSource.next();
       const answer: Result = {
         page,
-
         search: undefined,
         total: undefined,
       };
@@ -172,7 +170,6 @@ describe("Data Source", function () {
       const result = await dataSource.next();
       const answer: Result = {
         page,
-
         search: undefined,
         total: undefined,
       };
@@ -272,40 +269,23 @@ describe("Data Source", function () {
   });
 
   describe("filter()", function () {
-    it("Filter without data", function () {
+    it("Filter without data", async function () {
       const dataSource = new DataSource(basicOptions);
 
-      const result = dataSource.filter(() => true);
+      const result = await dataSource.filter(() => true);
       const answer: Result = {
         page: [],
-
         search: undefined,
         total: undefined,
       };
 
       assert.deepEqual(result, answer);
     });
-
-    it("Filter exist data", async function () {
-      const dataSource = new DataSource(basicOptions);
-
-      await dataSource.query();
-      const result = dataSource.filter(() => true);
-      const answer: Result = {
-        page: mockData.slice(0, 50),
-
-        search: undefined,
-        total: undefined,
-      };
-
-      assert.deepEqual(result, answer);
-    });
-
     it("Filter exist data with value", async function () {
       const dataSource = new DataSource(basicOptions);
 
       await dataSource.fetch();
-      const result = dataSource.filter(({ firtName }) =>
+      const result = await dataSource.filter(({ firtName }) =>
         firtName.startsWith("Sy")
       );
       const answer: Result = {

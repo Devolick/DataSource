@@ -1,4 +1,4 @@
-import { DataSourceOptions, Result, Request } from "./default";
+import { DataSourceOptions, Result, Request, RequestType } from "./default";
 
 export class DataSource<T = any, S = any> {
   get search(): S | null | undefined {
@@ -31,9 +31,6 @@ export class DataSource<T = any, S = any> {
   get more(): boolean {
     return this._more;
   }
-  get data(): T[] {
-    return this.get();
-  }
 
   private _search?: S | null;
   private _page!: T[];
@@ -57,13 +54,13 @@ export class DataSource<T = any, S = any> {
     this.init(_options);
   }
 
-  clone(full?: boolean): DataSource<T, S> {
+  clone(all?: boolean): DataSource<T, S> {
     const clone = new DataSource<T, S>({
       size: this._options.size,
       limit: this._options.limit,
       request: this._options.request,
     });
-    if (full) {
+    if (all) {
       Object.assign(clone, this);
     }
 
@@ -74,20 +71,34 @@ export class DataSource<T = any, S = any> {
     return this._filtered || this._data;
   }
   set(data: T[]): void {
+    this.init(this._options);
+
     this._data = data;
     this._filtered = this._predicate
       ? this._data.filter(this._predicate)
-      : this._data;
+      : null;
+    this._indexes = Math.ceil(this.get().length / this._size);
   }
 
-  query(search?: S): Promise<Result<T, S>> {
+  request: RequestType<T, S> = ({ index, size, search }) => {
+    return this._options.request({
+      index,
+      size,
+      search,
+    });
+  };
+  query(search?: S | null): Promise<Result<T, S>> {
     const that = this._predicate ? this.clone(false) : this;
     const size = this._predicate ? this._limit : this._size;
-    const repeat = async (index: number = 0): Promise<Result<T, S>> =>
-      await that
-        .load(size, ++index, search)
-        .then(async () => (that._more ? await repeat(index) : that.read(0)));
-    const promise = repeat(-1).then((result) => {
+    let count = 0;
+    const repeat = async (index: number): Promise<Result<T, S>> =>
+      await that.load(size, index, search).then(async (result) => {
+        count += result.page.length;
+        return that._more && count < size
+          ? await repeat(index + 1)
+          : that.read(0);
+      });
+    const promise = repeat(0).then((result) => {
       Object.assign(this, that);
       return result;
     });
@@ -96,13 +107,13 @@ export class DataSource<T = any, S = any> {
   }
   fetch(search?: S): Promise<Result<T, S>> {
     const that = this.clone(false);
-    const repeat = async (index: number = 0): Promise<Result<T, S>> =>
+    const repeat = async (index: number): Promise<Result<T, S>> =>
       await that
-        .load(this._limit, index + 1, search)
+        .load(this._limit, index, search)
         .then(async () =>
           that._more ? await repeat(index + 1) : that.read(0)
         );
-    const promise = repeat(-1).then((result) => {
+    const promise = repeat(0).then((result) => {
       Object.assign(this, that);
       return result;
     });
@@ -110,18 +121,23 @@ export class DataSource<T = any, S = any> {
     return promise;
   }
   next(index?: number): Promise<Result<T, S>> {
-    if (index === undefined || index > this._indexes) {
-      index = index ? this._indexes : index ?? -1;
+    const length = this.get().length;
+    if (
+      index === undefined ||
+      index >= this._indexes ||
+      (this._predicate && this._more && length < this._size)
+    ) {
+      index = index && index > -1 ? this._indexes : index ?? 0;
       const that = this._predicate ? this.clone(false) : this;
       const size = this._predicate ? this._limit : this._size;
-      const repeat = async (index: number = 0): Promise<Result<T, S>> =>
-        await that
-          .load(size, ++index, this._search)
-          .then(async (result) =>
-            that._more && result.page.length < size
-              ? await repeat(index)
-              : that.read(0)
-          );
+      let count = 0;
+      const repeat = async (index: number): Promise<Result<T, S>> =>
+        await that.load(size, index, this._search).then(async (result) => {
+          count += result.page.length;
+          return that._more && count < size
+            ? await repeat(index + 1)
+            : that.read(0);
+        });
       const promise = repeat(index).then((result) => {
         Object.assign(this, that);
         return result;
@@ -129,27 +145,27 @@ export class DataSource<T = any, S = any> {
 
       return promise;
     } else {
-      index = Math.min(Math.max(index ?? 0, 1), 20);
+      index = Math.min(Math.max(index ?? 0, 0), 20);
       const result = this.read(index);
 
       return this.promise(Promise.resolve(result));
     }
   }
-
-  cancel(): void {
-    this._reject?.();
-  }
-
   filter(
     predicate: ((value: T, index: number, array: T[]) => boolean) | null
-  ): Result<T, S> {
+  ): Promise<Result<T, S>> {
     this.cancel();
 
     this._predicate = predicate;
-    this.set(this._data);
-    const result = this.read(0);
+    this._filtered = this._predicate
+      ? this._data.filter(this._predicate)
+      : null;
+    this._indexes = Math.ceil(this.get().length / this._size);
 
-    return result;
+    return this.next(0);
+  }
+  cancel(): void {
+    this._reject?.();
   }
 
   insert(
@@ -242,7 +258,6 @@ export class DataSource<T = any, S = any> {
       this._page = response.page;
       this._data.push(...response.page);
       this._index = index!;
-      this._indexes = Math.ceil(this._data.length / size);
       this._search = response.search;
       this._total = response.total;
 
