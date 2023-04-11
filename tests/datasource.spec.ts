@@ -20,11 +20,10 @@ describe("Data Source", function () {
       const page = mockData
         .filter(({ firtName }) => !search || firtName.startsWith(search || ""))
         .slice(index * size, index * size + size);
-      const more = index < Math.ceil(mockData.length / size);
 
       return new Promise((resolve) => {
         setTimeout(() => {
-          resolve({ page, more });
+          resolve({ page });
         }, 10);
       });
     },
@@ -68,7 +67,7 @@ describe("Data Source", function () {
       const result = await dataSource.query();
       const answer: Result = {
         page,
-        more: true,
+
         search: undefined,
         total: undefined,
       };
@@ -96,7 +95,6 @@ describe("Data Source", function () {
             carModel: "Silverado 3500",
           },
         ],
-        more: false,
         search: undefined,
         total: undefined,
       };
@@ -113,7 +111,34 @@ describe("Data Source", function () {
       const result = await dataSource.fetch();
       const answer: Result = {
         page,
-        more: false,
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+    it("Fetch data with search", async function () {
+      const dataSource = new DataSource(basicOptions);
+
+      const result = await dataSource.fetch("Sy");
+      const answer: Result = {
+        page: [
+          {
+            id: 8,
+            firtName: "Sydney",
+            lastName: "Brosnan",
+            email: "sbrosnan7@slate.com",
+            carModel: "Jetta III",
+          },
+          {
+            id: 790,
+            firtName: "Sydney",
+            lastName: "Archanbault",
+            email: "sarchanbaultlx@1und1.de",
+            carModel: "Silverado 3500",
+          },
+        ],
+
         search: undefined,
         total: undefined,
       };
@@ -130,7 +155,24 @@ describe("Data Source", function () {
       const result = await dataSource.next();
       const answer: Result = {
         page,
-        more: true,
+
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+    it("Next data with index", async function () {
+      const page = mockData
+        .filter(({ firtName }) => firtName.startsWith("A"))
+        .slice(0, 50);
+      const dataSource = new DataSource(basicOptions);
+
+      await dataSource.fetch("A");
+      const result = await dataSource.next();
+      const answer: Result = {
+        page,
+
         search: undefined,
         total: undefined,
       };
@@ -140,7 +182,7 @@ describe("Data Source", function () {
   });
 
   describe("cancel()", function () {
-    it("Cancel request", function () {
+    it("Cancel fetch request", function () {
       const dataSource = new DataSource(basicOptions);
 
       dataSource.fetch();
@@ -148,6 +190,84 @@ describe("Data Source", function () {
       assert.doesNotThrow(() => {
         dataSource.cancel();
       });
+    });
+    it("Cancel fetch request check state", function () {
+      const dataSource = new DataSource(basicOptions);
+
+      dataSource.fetch();
+      dataSource.cancel();
+
+      const result: Result = {
+        page: dataSource.page,
+        search: dataSource.search,
+        total: dataSource.total,
+      };
+      const answer: Result = {
+        page: [],
+
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+    it("Cancel query request", function () {
+      const dataSource = new DataSource(basicOptions);
+
+      dataSource.query();
+
+      assert.doesNotThrow(() => {
+        dataSource.cancel();
+      });
+    });
+    it("Cancel query request check state", function () {
+      const dataSource = new DataSource(basicOptions);
+
+      dataSource.query();
+      dataSource.cancel();
+
+      const result: Result = {
+        page: dataSource.page,
+        search: dataSource.search,
+        total: dataSource.total,
+      };
+      const answer: Result = {
+        page: [],
+
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
+    });
+    it("Cancel next request", function () {
+      const dataSource = new DataSource(basicOptions);
+
+      dataSource.next();
+
+      assert.doesNotThrow(() => {
+        dataSource.cancel();
+      });
+    });
+    it("Cancel next request check state", function () {
+      const dataSource = new DataSource(basicOptions);
+
+      dataSource.next();
+      dataSource.cancel();
+
+      const result: Result = {
+        page: dataSource.page,
+        search: dataSource.search,
+        total: dataSource.total,
+      };
+      const answer: Result = {
+        page: [],
+
+        search: undefined,
+        total: undefined,
+      };
+
+      assert.deepEqual(result, answer);
     });
   });
 
@@ -158,7 +278,7 @@ describe("Data Source", function () {
       const result = dataSource.filter(() => true);
       const answer: Result = {
         page: [],
-        more: false,
+
         search: undefined,
         total: undefined,
       };
@@ -173,7 +293,7 @@ describe("Data Source", function () {
       const result = dataSource.filter(() => true);
       const answer: Result = {
         page: mockData.slice(0, 50),
-        more: true,
+
         search: undefined,
         total: undefined,
       };
@@ -205,7 +325,6 @@ describe("Data Source", function () {
             carModel: "Silverado 3500",
           },
         ],
-        more: false,
         search: undefined,
         total: undefined,
       };
@@ -243,7 +362,7 @@ describe("Data Source", function () {
 
           return mock;
         }),
-        more: false,
+
         search: undefined,
         total: undefined,
       };
@@ -289,7 +408,7 @@ describe("Data Source", function () {
     });
   });
 
-  describe("Using", function () {
+  describe("Usage", function () {
     it("", function () {});
   });
 });

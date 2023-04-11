@@ -1,8 +1,8 @@
 import { DataSourceOptions, Result, Request } from "./default";
 
 export class DataSource<T = any, S = any> {
-  get search(): T[] {
-    return this.search;
+  get search(): S | null | undefined {
+    return this._search;
   }
   get page(): T[] {
     return this._page;
@@ -73,7 +73,6 @@ export class DataSource<T = any, S = any> {
   get(): T[] {
     return this._filtered || this._data;
   }
-
   set(data: T[]): void {
     this._data = data;
     this._filtered = this._predicate
@@ -87,11 +86,7 @@ export class DataSource<T = any, S = any> {
     const repeat = async (index: number = 0): Promise<Result<T, S>> =>
       await that
         .load(size, ++index, search)
-        .then(async (result) =>
-          that._more && result.page.length < size
-            ? await repeat(index)
-            : that.read(0)
-        );
+        .then(async () => (that._more ? await repeat(index) : that.read(0)));
     const promise = repeat(-1).then((result) => {
       Object.assign(this, that);
       return result;
@@ -243,7 +238,7 @@ export class DataSource<T = any, S = any> {
     };
 
     const result = this._options.request(context).then((response) => {
-      this._more = response.more;
+      this._more = response.page.length >= size;
       this._page = response.page;
       this._data.push(...response.page);
       this._index = index!;
@@ -265,7 +260,6 @@ export class DataSource<T = any, S = any> {
     this._page = this.get().slice(this._index, this._size);
     const result: Result<T, S> = {
       page: this._page,
-      more: this._more,
       search: this._search,
       total: this._total,
     };

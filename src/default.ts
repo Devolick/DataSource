@@ -1,7 +1,6 @@
 export interface Result<T = any, S = any> {
   readonly search?: S | null;
   readonly page: T[];
-  readonly more: boolean;
   readonly total?: number | null;
 }
 
