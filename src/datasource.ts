@@ -55,11 +55,7 @@ export class DataSource<T = any, S = any> {
   }
 
   clone(all?: boolean): DataSource<T, S> {
-    const clone = new DataSource<T, S>({
-      size: this._options.size,
-      limit: this._options.limit,
-      request: this._options.request,
-    });
+    const clone = new DataSource<T, S>(this._options);
     if (all) {
       Object.assign(clone, this);
     }
@@ -71,13 +67,13 @@ export class DataSource<T = any, S = any> {
     return this._filtered || this._data;
   }
   set(data: T[]): void {
-    this.init(this._options);
-
     this._data = data;
-    this._filtered = this._predicate
-      ? this._data.filter(this._predicate)
-      : null;
-    this._indexes = Math.ceil(this.get().length / this._size);
+    this._more = false;
+    this._search = null;
+    this._total = data.length;
+    this._filtered = null;
+
+    this.read(0);
   }
 
   request: RequestType<T, S> = ({ index, size, search }) => {
@@ -260,8 +256,10 @@ export class DataSource<T = any, S = any> {
       this._index = index!;
       this._search = response.search;
       this._total = response.total;
-
-      this.set(this._data);
+      this._filtered = this._predicate
+        ? this._data.filter(this._predicate)
+        : null;
+      this._indexes = Math.ceil(this.get().length / this._size);
 
       return response;
     });

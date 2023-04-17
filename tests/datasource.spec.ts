@@ -9,7 +9,7 @@ interface Mock {
   readonly firtName: string;
   readonly lastName: string;
   readonly email: string;
-  readonly carModel: number;
+  readonly carModel: string;
 }
 
 describe("Data Source", function () {
@@ -31,8 +31,12 @@ describe("Data Source", function () {
 
   describe("clone()", function () {
     it("Clone new data source instance", function () {
-      const dataSource = new DataSource(basicOptions);
-      const cloneDataSource = dataSource.clone();
+      const dataSource = new DataSource({
+        limit: 100,
+        size: 50,
+        request: () => Promise.resolve({ page: [] }),
+      });
+      const cloneDataSource = dataSource.clone(false);
 
       assert.deepEqual(dataSource, cloneDataSource);
     });
@@ -40,7 +44,7 @@ describe("Data Source", function () {
       const dataSource = new DataSource(basicOptions);
       dataSource["_search"] = { test: "test" } as any;
       dataSource["_page"] = ["test"] as any;
-      dataSource["_index"] = 1;
+      dataSource["_index"] = 0;
       dataSource["_indexes"] = 1;
       dataSource["_size"] = 40;
       dataSource["_limit"] = 900;
@@ -49,8 +53,8 @@ describe("Data Source", function () {
       dataSource["_more"] = true;
 
       dataSource["_data"] = ["test"] as any;
-      dataSource["_filtered"] = ["test"] as any;
-      dataSource["_predicate"] = new Function() as any;
+      dataSource["_filtered"] = null as any;
+      dataSource["_predicate"] = null as any;
       dataSource["_reject"] = new Function() as any;
 
       const cloneDataSource = dataSource.clone(true);
@@ -270,11 +274,12 @@ describe("Data Source", function () {
 
   describe("filter()", function () {
     it("Filter without data", async function () {
+      const page = mockData.slice(0, 50);
       const dataSource = new DataSource(basicOptions);
 
       const result = await dataSource.filter(() => true);
       const answer: Result = {
-        page: [],
+        page,
         search: undefined,
         total: undefined,
       };
@@ -373,22 +378,60 @@ describe("Data Source", function () {
 
       assert.deepEqual(result, []);
     });
+    it("Get query data", async function () {
+      const dataSource = new DataSource<Mock>(basicOptions);
+
+      await dataSource.query();
+      const result = dataSource.get();
+
+      assert.deepEqual(mockData.splice(0, 50), result);
+    });
+    it("Get filter data", async function () {
+      const dataSource = new DataSource<Mock>(basicOptions);
+
+      await dataSource.fetch();
+      await dataSource.filter(({ firtName }) => firtName.startsWith("Sy"));
+      const answer: Mock[] = [
+        {
+          id: 8,
+          firtName: "Sydney",
+          lastName: "Brosnan",
+          email: "sbrosnan7@slate.com",
+          carModel: "Jetta III",
+        },
+        {
+          id: 790,
+          firtName: "Sydney",
+          lastName: "Archanbault",
+          email: "sarchanbaultlx@1und1.de",
+          carModel: "Silverado 3500",
+        },
+      ];
+
+      const result = dataSource.get();
+
+      assert.deepEqual(result, answer);
+    });
   });
 
   describe("set()", function () {});
 
   describe("iterator()", function () {
-    it("Each without data", function () {
+    it("Each without data", async function () {
       const dataSource = new DataSource<Mock>(basicOptions);
 
-      assert.doesNotThrow(() => {
-        for (const item of dataSource) {
-        }
-      });
+      await dataSource.query();
+
+      const items: Mock[] = [];
+      for (const item of dataSource) {
+        items.push(item);
+      }
+
+      assert.deepEqual(mockData.splice(0, 50), items);
     });
   });
 
-  describe("Usage", function () {
+  describe("usage", function () {
     it("", function () {});
   });
 });
