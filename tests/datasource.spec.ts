@@ -329,7 +329,6 @@ describe("Data Source", function () {
         );
       });
     });
-
     it("Upsert exist data for value", async function () {
       const dataSource = new DataSource<Mock>(basicOptions);
 
@@ -347,7 +346,6 @@ describe("Data Source", function () {
 
           return mock;
         }),
-
         search: undefined,
         total: undefined,
       };
@@ -363,10 +361,11 @@ describe("Data Source", function () {
   describe("clear()", function () {
     it("Clear without data", function () {
       const dataSource = new DataSource<Mock>(basicOptions);
+      const cloneSource = dataSource.clone(false);
 
-      assert.doesNotThrow(() => {
-        dataSource.clear();
-      });
+      dataSource.clear();
+
+      assert.deepEqual(dataSource, cloneSource);
     });
   });
 

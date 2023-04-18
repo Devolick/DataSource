@@ -173,6 +173,9 @@ export class DataSource<T = any, S = any> {
     const index = this._data.findIndex(predicate);
     if (index > -1) {
       this._data.splice(index, 0, ...items);
+      this._filtered = this._predicate
+        ? this._data.filter(this._predicate)
+        : null;
     }
     const result = this.read(this._index);
 
@@ -187,6 +190,9 @@ export class DataSource<T = any, S = any> {
     const index = this.get().findIndex(predicate);
     if (index > -1) {
       const newItem = item(this.get()[index], index);
+      this._filtered = this._predicate
+        ? this._data.filter(this._predicate)
+        : null;
       this.get().splice(index, 1, newItem);
     }
     const result = this.read(0);
@@ -197,6 +203,9 @@ export class DataSource<T = any, S = any> {
     this.cancel();
 
     this._data = this._data.filter((value, index) => !predicate(value, index));
+    this._filtered = this._predicate
+      ? this._data.filter(this._predicate)
+      : null;
     const result = this.read(0);
 
     return result;
